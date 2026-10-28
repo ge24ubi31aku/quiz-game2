@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3択クイズゲーム</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap');
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            user-select: none;
+        }
+        /* パルスアニメーション */
+        @keyframes pulse-slow {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.85; }
+        }
+        .pulse-slow {
+            animation: pulse-slow 2.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-white w-screen h-screen overflow-hidden flex items-center justify-center">
+
+    <!-- ===== ゲームコンテナ (画面中央固定・レスポンシブ) ===== -->
+    <div id="game-container" class="relative w-full h-full max-w-5xl max-h-[100vh] aspect-video bg-black flex flex-col justify-between overflow-hidden shadow-2xl">
+
+        <!-- ===== ヘッダーナビゲーション (素材セットボタン: スタート画面でのみ表示) ===== -->
+        <div id="header-nav" class="absolute top-0 left-0 right-0 z-50 p-3 flex justify-end items-center pointer-events-none">
+            <div class="flex items-center space-x-2 pointer-events-auto">
+                <!-- 設定ボタン -->
+                <button id="btn-settings" class="bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-full border border-indigo-400/40 shadow-xl backdrop-blur-md flex items-center space-x-2 transition active:scale-95">
+                    <i class="fa-solid fa-gear"></i>
+                    <span>素材セット</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== メインスクリーン（ゲームビューポート） ===== -->
+        <div id="game-viewport" class="relative w-full h-full flex items-center justify-center overflow-hidden">
+
+            <!-- ===== 0. スタート画面層 ===== -->
+            <div id="start-screen" class="absolute inset-0 z-40 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 flex flex-col items-center justify-end pb-12 sm:pb-16 cursor-pointer select-none transition-opacity duration-500">
+                <!-- カスタムスタート画面画像 -->
+                <img id="bg-image-start" class="w-full h-full object-contain hidden absolute inset-0 z-0" alt="スタート画面イラスト" />
+
+                <!-- デフォルトスタート表示 (位置をかなり下に配置) -->
+                <div class="text-center px-4 pulse-slow relative z-10 pointer-events-none">
+                    <p class="text-xs sm:text-sm font-bold text-indigo-200 bg-indigo-950/80 px-5 py-2 rounded-full border border-indigo-500/40 inline-block shadow-lg backdrop-blur-sm">
+                        画面をクリックしてスタート！
+                    </p>
+                </div>
+            </div>
+
+            <!-- ===== 1. 背景層 (画像表示) ===== -->
+            <div id="bg-layer" class="absolute inset-0 z-0 flex items-center justify-center bg-slate-900 overflow-hidden">
+                <img id="bg-image-tutorial" class="w-full h-full object-contain hidden" alt="遊び方説明" />
+                <img id="bg-image-ch1" class="w-full h-full object-contain hidden" alt="第1章 背景" />
+                <img id="bg-image-ch2" class="w-full h-full object-contain hidden" alt="第2章 背景" />
+                <img id="bg-image-ch3" class="w-full h-full object-contain hidden" alt="第3章 背景" />
+                <img id="bg-image-ch4" class="w-full h-full object-contain hidden" alt="第4章 背景" />
+                <img id="bg-image-ch5" class="w-full h-full object-contain hidden" alt="第5章 背景" />
+                <img id="bg-image-ch6" class="w-full h-full object-contain hidden" alt="第6章 背景" />
+                <div id="no-bg-fallback" class="hidden text-slate-500 text-sm flex flex-col items-center">
+                    <i class="fa-regular fa-image text-4xl mb-2"></i>
+                    <span>背景画像が未設定です</span>
+                </div>
+            </div>
+
+            <!-- ===== 1.5 チュートリアル（遊び方説明）オーバーレイ層 ===== -->
+            <div id="tutorial-screen" class="absolute inset-0 z-30 flex flex-col items-center justify-end pb-8 cursor-pointer hidden">
+                <div class="pulse-slow pointer-events-none mb-4">
+                    <p class="text-xs sm:text-sm font-bold text-indigo-200 bg-indigo-950/80 px-5 py-2 rounded-full border border-indigo-500/40 inline-block shadow-lg backdrop-blur-sm">
+                        画面をクリックして次へ進む
+                    </p>
+                </div>
+            </div>
+
+            <!-- ===== 2. 動画プレイヤー層 ===== -->
+            <div id="video-layer" class="absolute inset-0 z-20 bg-black hidden flex items-center justify-center">
+                <video id="game-video" class="w-full h-full object-contain" playsinline></video>
+                <button id="btn-skip-video" class="absolute bottom-4 right-4 z-30 bg-black/60 hover:bg-black/80 text-white/80 hover:text-white text-xs px-3 py-1.5 rounded-full border border-white/20 transition backdrop-blur-sm">
+                    スキップ <i class="fa-solid fa-forward ml-1"></i>
+                </button>
+            </div>
+
+            <!-- ===== 3. クイズUI層 (選択肢表示) ===== -->
+            <div id="quiz-ui" class="absolute inset-0 z-10 flex flex-col justify-end pb-8 sm:pb-12 p-4 sm:p-6 hidden pointer-events-none">
+                
+                <!-- 選択肢コンテナ (Y軸の位置調整: さらにがっつり上方向へ引き上げ) -->
+                <div class="w-full max-w-2xl mx-auto pointer-events-auto transform translate-y-[-70%] sm:translate-y-[-80%]">
+
+                    <!-- 第1章 メメント クイズ選択肢 -->
+                    <div id="choices-ch1" class="space-y-2 sm:space-y-3 hidden">
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">1</span>
+                            <span class="text-left">慎重で何事も調べないと気が済まない</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">2</span>
+                            <span class="text-left">仲間と力を合わせて成功してきた</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="true">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">3</span>
+                            <span class="text-left">目先の問題に意識が向きすぎて後先を考えない</span>
+                        </button>
+                    </div>
+
+                    <!-- 第2章 シナジン クイズ選択肢 -->
+                    <div id="choices-ch2" class="space-y-2 sm:space-y-3 hidden">
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">1</span>
+                            <span class="text-left">断捨離が大好き</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="true">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">2</span>
+                            <span class="text-left">収集癖がある</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">3</span>
+                            <span class="text-left">全体的に関心が薄い</span>
+                        </button>
+                    </div>
+
+                    <!-- 第3章 せる クイズ選択肢 -->
+                    <div id="choices-ch3" class="space-y-2 sm:space-y-3 hidden">
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="true">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">1</span>
+                            <span class="text-left">八方美人</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">2</span>
+                            <span class="text-left">我が強く、自分を貫く</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">3</span>
+                            <span class="text-left">人と対立することが多い</span>
+                        </button>
+                    </div>
+
+                    <!-- 第4章 はるすけ クイズ選択肢 -->
+                    <div id="choices-ch4" class="space-y-2 sm:space-y-3 hidden">
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">1</span>
+                            <span class="text-left">節約家</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">2</span>
+                            <span class="text-left">おしゃれに興味がない</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="true">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">3</span>
+                            <span class="text-left">フットワークが軽い</span>
+                        </button>
+                    </div>
+
+                    <!-- 第5章 蓮太郎 クイズ選択肢 -->
+                    <div id="choices-ch5" class="space-y-2 sm:space-y-3 hidden">
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">1</span>
+                            <span class="text-left">野球が好き</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="true">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">2</span>
+                            <span class="text-left">絵を描くのが好き</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">3</span>
+                            <span class="text-left">破壊が好き</span>
+                        </button>
+                    </div>
+
+                    <!-- 第6章 しずまる クイズ1 選択肢 -->
+                    <div id="choices-ch6-q1" class="space-y-2 sm:space-y-3 hidden">
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="true">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">1</span>
+                            <span class="text-left">無いものは自分で生み出そうと工夫していた</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">2</span>
+                            <span class="text-left">早々に諦める癖がついていた</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">3</span>
+                            <span class="text-left">全てお金で解決しようと思っていた</span>
+                        </button>
+                    </div>
+
+                    <!-- 第6章 しずまる クイズ2 選択肢 -->
+                    <div id="choices-ch6-q2" class="space-y-2 sm:space-y-3 hidden">
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">1</span>
+                            <span class="text-left">ツーブロックだった？</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="false">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">2</span>
+                            <span class="text-left">足が大きかった？</span>
+                        </button>
+                        <button class="quiz-choice-btn w-full bg-slate-900/90 hover:bg-indigo-900/90 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl border border-indigo-500/40 shadow-lg backdrop-blur-md transition flex items-center space-x-3 active:scale-[0.98]" data-correct="true">
+                            <span class="w-6 h-6 rounded-full bg-indigo-600/60 text-indigo-200 text-xs flex items-center justify-center shrink-0">3</span>
+                            <span class="text-left">眼鏡をかけていた？</span>
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ===== 素材セット設定モーダル ===== -->
+    <div id="modal-settings" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            
+            <!-- モーダルヘッダー -->
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
+                <h2 class="text-base font-bold text-indigo-300 flex items-center space-x-2">
+                    <i class="fa-solid fa-folder-open"></i>
+                    <span>素材セットの設定・保存</span>
+                </h2>
+                <button id="btn-close-modal" class="text-slate-400 hover:text-white text-lg p-1 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- モーダル本文 (ファイル入力リスト) -->
+            <div class="p-4 overflow-y-auto space-y-4 text-xs text-slate-300">
+
+                <p class="text-slate-400 text-xs bg-indigo-950/40 border border-indigo-800/40 p-3 rounded-lg">
+                    💡 ファイルを選ぶか、下の欄にGoogle Driveの共有URLを貼り付けてください。URLが入っている素材はURLが優先され、設定は次回起動時も保存されます。
+                </p>
+
+                <!-- 0-A. スタート画面画像 -->
+                <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+                    <label class="block font-bold text-indigo-300 mb-1">0-A. スタート画面画像（静止画）</label>
+                    <input type="file" id="file-start-bg" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" />
+                </div>
+
+                <!-- 0-B. スタート画面BGM -->
+                <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+                    <label class="block font-bold text-indigo-300 mb-1">0-B. スタート画面のBGM（音声）</label>
+                    <input type="file" id="file-start-bgm" accept="audio/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" />
+                </div>
+
+                <!-- 0-C. 正解SE -->
+                <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+                    <label class="block font-bold text-emerald-300 mb-1">0-C. クイズ正解時の効果音（SE）</label>
+                    <input type="file" id="file-correct-se" accept="audio/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer" />
+                </div>
+
+                <!-- 0. オープニングムービー（通常） -->
+                <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+                    <label class="block font-bold text-indigo-300 mb-1">0. オープニングムービー（通常）</label>
+                    <input type="file" id="file-op" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" />
+                </div>
+
+                <!-- 0. 遊び方説明（静止画） -->
+                <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+                    <label class="block font-bold text-indigo-300 mb-1">0. 遊び方説明（静止画）</label>
+                    <input type="file" id="file-tutorial" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" />
+                </div>
+
+                <!-- 第1章 メメント編 -->
+                <div class="bg-slate-800/30 p-3 rounded-xl border border-slate-700/40 space-y-2">
+                    <h3 class="font-bold text-indigo-400 border-b border-slate-700/50 pb-1">メメント編</h3>
+                    <div>
+                        <label class="block mb-1 text-slate-300">1. メメント編 (動画)</label>
+                        <input type="file" id="file-ch1-video" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">2. メメント画像 (静止画)</label>
+                        <input type="file" id="file-ch1-bg" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">3. メメント正解 (動画)</label>
+                        <input type="file" id="file-ch1-correct" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">4. メメント不正解 (動画)</label>
+                        <input type="file" id="file-ch1-incorrect" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">5. メメントクリア (動画)</label>
+                        <input type="file" id="file-ch1-clear" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                </div>
+
+                <!-- 第2章 シナジン編 -->
+                <div class="bg-slate-800/30 p-3 rounded-xl border border-slate-700/40 space-y-2">
+                    <h3 class="font-bold text-indigo-400 border-b border-slate-700/50 pb-1">シナジン編</h3>
+                    <div>
+                        <label class="block mb-1 text-slate-300">6. シナジン編 (動画)</label>
+                        <input type="file" id="file-ch2-video" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">7. シナジン画像 (静止画)</label>
+                        <input type="file" id="file-ch2-bg" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">8. シナジン正解 (動画)</label>
+                        <input type="file" id="file-ch2-correct" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">9. シナジン不正解 (動画)</label>
+                        <input type="file" id="file-ch2-incorrect" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">10. シナジンクリア (動画)</label>
+                        <input type="file" id="file-ch2-clear" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                </div>
+
+                <!-- 第3章 せる編 -->
+                <div class="bg-slate-800/30 p-3 rounded-xl border border-slate-700/40 space-y-2">
+                    <h3 class="font-bold text-indigo-400 border-b border-slate-700/50 pb-1">せる編</h3>
+                    <div>
+                        <label class="block mb-1 text-slate-300">11. せる編 (動画)</label>
+                        <input type="file" id="file-ch3-video" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">12. せる画像 (静止画)</label>
+                        <input type="file" id="file-ch3-bg" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">13. せる正解 (動画)</label>
+                        <input type="file" id="file-ch3-correct" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">14. せる不正解 (動画)</label>
+                        <input type="file" id="file-ch3-incorrect" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">15. せるクリア (動画)</label>
+                        <input type="file" id="file-ch3-clear" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                </div>
+
+                <!-- 第4章 はるすけ編 -->
+                <div class="bg-slate-800/30 p-3 rounded-xl border border-slate-700/40 space-y-2">
+                    <h3 class="font-bold text-indigo-400 border-b border-slate-700/50 pb-1">はるすけ編</h3>
+                    <div>
+                        <label class="block mb-1 text-slate-300">16. はるすけ編 (動画)</label>
+                        <input type="file" id="file-ch4-video" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">17. はるすけ画像 (静止画)</label>
+                        <input type="file" id="file-ch4-bg" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">18. はるすけ正解 (動画)</label>
+                        <input type="file" id="file-ch4-correct" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">19. はるすけ不正解 (動画)</label>
+                        <input type="file" id="file-ch4-incorrect" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">20. はるすけクリア (動画)</label>
+                        <input type="file" id="file-ch4-clear" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                </div>
+
+                <!-- 第5章 蓮太郎編 -->
+                <div class="bg-slate-800/30 p-3 rounded-xl border border-slate-700/40 space-y-2">
+                    <h3 class="font-bold text-indigo-400 border-b border-slate-700/50 pb-1">蓮太郎編</h3>
+                    <div>
+                        <label class="block mb-1 text-slate-300">21. 蓮太郎編 (動画)</label>
+                        <input type="file" id="file-ch5-video" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">22. 蓮太郎画像 (静止画)</label>
+                        <input type="file" id="file-ch5-bg" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">23. 蓮太郎正解 (動画)</label>
+                        <input type="file" id="file-ch5-correct" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">24. 蓮太郎不正解 (動画)</label>
+                        <input type="file" id="file-ch5-incorrect" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">25. 蓮太郎クリア (動画)</label>
+                        <input type="file" id="file-ch5-clear" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                </div>
+
+                <!-- 第6章 しずまる編 -->
+                <div class="bg-slate-800/30 p-3 rounded-xl border border-slate-700/40 space-y-2">
+                    <h3 class="font-bold text-indigo-400 border-b border-slate-700/50 pb-1">しずまる編</h3>
+                    <div>
+                        <label class="block mb-1 text-slate-300">26. しずまる編 (動画)</label>
+                        <input type="file" id="file-ch6-video" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">27. しずまる画像 (静止画)</label>
+                        <input type="file" id="file-ch6-bg" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">28. しずまる正解(1) (動画)</label>
+                        <input type="file" id="file-ch6-correct1" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">29. しずまる不正解(1) (動画)</label>
+                        <input type="file" id="file-ch6-incorrect1" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">30. しずまる正解(2) (動画)</label>
+                        <input type="file" id="file-ch6-correct2" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-slate-300">31. しずまる不正解(2) (動画)</label>
+                        <input type="file" id="file-ch6-incorrect2" accept="video/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-white hover:file:bg-slate-600" />
+                    </div>
+                </div>
+
+                <!-- BGM -->
+                <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+                    <label class="block font-bold text-indigo-300 mb-1">32. 選択画面のBGM（音声）</label>
+                    <input type="file" id="file-bgm" accept="audio/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" />
+                </div>
+
+            </div>
+
+            <!-- モーダル フッター -->
+            <div class="p-4 border-t border-slate-800 bg-slate-950 flex justify-end space-x-3">
+                <button id="btn-apply-settings" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-lg transition active:scale-95">
+                    設定を適用して保存
+                </button>
+            </div>
+            
+            <div id="modal-status" class="hidden text-center py-1.5 bg-emerald-600 text-white text-xs font-bold">
+                素材の保存が完了しました！
+            </div>
+        </div>
+    </div>
+    <!-- オーディオプレイヤー（BGM・SE用） -->
+    <audio id="bg-audio" loop class="hidden"></audio>
+    <audio id="start-bg-audio" loop class="hidden"></audio>
+    <audio id="correct-se-audio" class="hidden"></audio>
+
+    <!-- ===== JavaScript ロジック ===== -->
+    <script>
+        // =========================================================================
+        // 🌐 素材ファイルURL設定（Google Driveの共有リンクをそのまま貼っても動作します！）
+        // =========================================================================
+        const MEDIA_CONFIG = {
+            // --- スタート画面・全体 ---
+            startBg: "",       // 例: "https://drive.google.com/file/d/XXXX/view?usp=sharing"
+            startBgm: "",      // 例: "https://drive.google.com/file/d/XXXX/view?usp=sharing"
+            correctSe: "",     // 例: "https://drive.google.com/file/d/XXXX/view?usp=sharing"
+            op: "",            // 例: "https://drive.google.com/file/d/XXXX/view?usp=sharing"
+            tutorialBg: "",    // 例: "https://drive.google.com/file/d/XXXX/view?usp=sharing"
+            choiceBgm: "",     // 例: "https://drive.google.com/file/d/XXXX/view?usp=sharing"
+
+            // --- 第1章 メメント編 ---
+            ch1Video: "",
+            ch1Bg: "",
+            ch1Correct: "",
+            ch1Incorrect: "",
+            ch1Clear: "",
+
+            // --- 第2章 シナジン編 ---
+            ch2Video: "",
+            ch2Bg: "",
+            ch2Correct: "",
+            ch2Incorrect: "",
+            ch2Clear: "",
+
+            // --- 第3章 せる編 ---
+            ch3Video: "",
+            ch3Bg: "",
+            ch3Correct: "",
+            ch3Incorrect: "",
+            ch3Clear: "",
+
+            // --- 第4章 はるすけ編 ---
+            ch4Video: "",
+            ch4Bg: "",
+            ch4Correct: "",
+            ch4Incorrect: "",
+            ch4Clear: "",
+
+            // --- 第5章 蓮太郎編 ---
+            ch5Video: "",
+            ch5Bg: "",
+            ch5Correct: "",
+            ch5Incorrect: "",
+            ch5Clear: "",
+
+            // --- 第6章 しずまる編 ---
+            ch6Video: "",
+            ch6Bg: "",
+            ch6Correct1: "",
+            ch6Incorrect1: "",
+            ch6Correct2: "",
+            ch6Incorrect2: ""
+        };
+
+        // Google Driveリンクを直接再生可能なURLに自動変換する関数
+        function convertGoogleDriveUrl(url) {
+            if (!url || typeof url !== 'string') return url;
+            // Google DriveのファイルID抽出パターン
+            const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+            if (driveMatch && driveMatch[1]) {
+                return `https://drive.google.com/uc?export=download&id=${driveMatch[1]}`;
+            }
+            return url;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // IndexedDB ストレージ管理
+            class MediaStorage {
+                constructor() {
+                    this.dbName = 'QuizGameMediaDB';
+                    this.storeName = 'mediaFiles';
+                    this.db = null;
+                }
+
+                async init() {
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open(this.dbName, 1);
+                        request.onupgradeneeded = (e) => {
+                            const db = e.target.result;
+                            if (!db.objectStoreNames.contains(this.storeName)) {
+                                db.createObjectStore(this.storeName);
+                            }
+                        };
+                        request.onsuccess = (e) => {
+                            this.db = e.target.result;
+                            resolve();
+                        };
+                        request.onerror = (e) => reject(e);
+                    });
+                }
+
+                async saveFile(key, file) {
+                    if (!this.db) await this.init();
+                    return new Promise((resolve, reject) => {
+                        const transaction = this.db.transaction([this.storeName], 'readwrite');
+                        const store = transaction.objectStore(this.storeName);
+                        const request = store.put(file, key);
+                        request.onsuccess = () => resolve();
+                        request.onerror = (e) => reject(e);
+                    });
+                }
+
+                async getFile(key) {
+                    if (!this.db) await this.init();
+                    return new Promise((resolve, reject) => {
+                        const transaction = this.db.transaction([this.storeName], 'readonly');
+                        const store = transaction.objectStore(this.storeName);
+                        const request = store.get(key);
+                        request.onsuccess = (e) => resolve(e.target.result);
+                        request.onerror = (e) => reject(e);
+                    });
+                }
+            }
+
+            const mediaStorage = new MediaStorage();
+
+            // DOM Elements
+            const startScreen = document.getElementById('start-screen');
+            const bgImageStart = document.getElementById('bg-image-start');
+            const tutorialScreen = document.getElementById('tutorial-screen');
+            const headerNav = document.getElementById('header-nav');
+            const btnSettings = document.getElementById('btn-settings');
+            const modalSettings = document.getElementById('modal-settings');
+            const btnCloseModal = document.getElementById('btn-close-modal');
+            const btnApplySettings = document.getElementById('btn-apply-settings');
+            const modalStatus = document.getElementById('modal-status');
+
+            const videoLayer = document.getElementById('video-layer');
+            const gameVideo = document.getElementById('game-video');
+            const btnSkipVideo = document.getElementById('btn-skip-video');
+
+            const noBgFallback = document.getElementById('no-bg-fallback');
+            const quizUi = document.getElementById('quiz-ui');
+            const bgAudio = document.getElementById('bg-audio');
+            const startBgAudio = document.getElementById('start-bg-audio');
+            const correctSeAudio = document.getElementById('correct-se-audio');
+
+            // 章ごとの背景画像
+            const bgImages = {
+                start: bgImageStart,
+                tutorial: document.getElementById('bg-image-tutorial'),
+                ch1: document.getElementById('bg-image-ch1'),
+                ch2: document.getElementById('bg-image-ch2'),
+                ch3: document.getElementById('bg-image-ch3'),
+                ch4: document.getElementById('bg-image-ch4'),
+                ch5: document.getElementById('bg-image-ch5'),
+                ch6: document.getElementById('bg-image-ch6')
+            };
+
+            // 選択肢コンテナ
+            const choicesContainers = {
+                ch1: document.getElementById('choices-ch1'),
+                ch2: document.getElementById('choices-ch2'),
+                ch3: document.getElementById('choices-ch3'),
+                ch4: document.getElementById('choices-ch4'),
+                ch5: document.getElementById('choices-ch5'),
+                'ch6-q1': document.getElementById('choices-ch6-q1'),
+                'ch6-q2': document.getElementById('choices-ch6-q2')
+            };
+
+            // 素材の一覧（ファイル選択欄・URL欄で共通して使う）
+            const assetInputs = [
+                { id: 'file-start-bg', key: 'startBg' },
+                { id: 'file-start-bgm', key: 'startBgm' },
+                { id: 'file-correct-se', key: 'correctSe' },
+                { id: 'file-op', key: 'op' },
+                { id: 'file-tutorial', key: 'tutorialBg' },
+                { id: 'file-ch1-video', key: 'ch1Video' },
+                { id: 'file-ch1-bg', key: 'ch1Bg' },
+                { id: 'file-ch1-correct', key: 'ch1Correct' },
+                { id: 'file-ch1-incorrect', key: 'ch1Incorrect' },
+                { id: 'file-ch1-clear', key: 'ch1Clear' },
+                { id: 'file-ch2-video', key: 'ch2Video' },
+                { id: 'file-ch2-bg', key: 'ch2Bg' },
+                { id: 'file-ch2-correct', key: 'ch2Correct' },
+                { id: 'file-ch2-incorrect', key: 'ch2Incorrect' },
+                { id: 'file-ch2-clear', key: 'ch2Clear' },
+                { id: 'file-ch3-video', key: 'ch3Video' },
+                { id: 'file-ch3-bg', key: 'ch3Bg' },
+                { id: 'file-ch3-correct', key: 'ch3Correct' },
+                { id: 'file-ch3-incorrect', key: 'ch3Incorrect' },
+                { id: 'file-ch3-clear', key: 'ch3Clear' },
+                { id: 'file-ch4-video', key: 'ch4Video' },
+                { id: 'file-ch4-bg', key: 'ch4Bg' },
+                { id: 'file-ch4-correct', key: 'ch4Correct' },
+                { id: 'file-ch4-incorrect', key: 'ch4Incorrect' },
+                { id: 'file-ch4-clear', key: 'ch4Clear' },
+                { id: 'file-ch5-video', key: 'ch5Video' },
+                { id: 'file-ch5-bg', key: 'ch5Bg' },
+                { id: 'file-ch5-correct', key: 'ch5Correct' },
+                { id: 'file-ch5-incorrect', key: 'ch5Incorrect' },
+                { id: 'file-ch5-clear', key: 'ch5Clear' },
+                { id: 'file-ch6-video', key: 'ch6Video' },
+                { id: 'file-ch6-bg', key: 'ch6Bg' },
+                { id: 'file-ch6-correct1', key: 'ch6Correct1' },
+                { id: 'file-ch6-incorrect1', key: 'ch6Incorrect1' },
+                { id: 'file-ch6-correct2', key: 'ch6Correct2' },
+                { id: 'file-ch6-incorrect2', key: 'ch6Incorrect2' },
+                { id: 'file-bgm', key: 'choiceBgm' }
+            ];
+
+            const URL_STORAGE_KEY = 'quizGameMediaUrls';
+            let savedMediaUrls = {};
+            try {
+                savedMediaUrls = JSON.parse(localStorage.getItem(URL_STORAGE_KEY) || '{}') || {};
+            } catch (e) {
+                savedMediaUrls = {};
+            }
+
+            // 素材URLリスト（保存済みURLを最優先。その次にHTML内の設定）
+            const mediaUrls = {};
+            Object.keys(MEDIA_CONFIG).forEach(key => {
+                mediaUrls[key] = convertGoogleDriveUrl(savedMediaUrls[key] || MEDIA_CONFIG[key]);
+            });
+
+            // 各ファイル選択欄のすぐ下に、対応するURL入力欄を自動で追加する
+            assetInputs.forEach(item => {
+                const fileInput = document.getElementById(item.id);
+                if (!fileInput || document.getElementById(`url-${item.key}`)) return;
+                const urlInput = document.createElement('input');
+                urlInput.type = 'url';
+                urlInput.id = `url-${item.key}`;
+                urlInput.value = savedMediaUrls[item.key] || '';
+                urlInput.placeholder = 'または Google Drive の共有URLを貼り付け';
+                urlInput.setAttribute('aria-label', `${item.key} の素材URL`);
+                urlInput.className = 'mt-2 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-indigo-400 focus:outline-none';
+                fileInput.insertAdjacentElement('afterend', urlInput);
+            });
+
+            // ゲーム進行ステート
+            let currentChapter = 'start'; 
+            let onVideoEndedCallback = null;
+
+            // --- 初期化 & メディア読み込み ---
+            async function initStorage() {
+                try {
+                    await mediaStorage.init();
+                    const keys = Object.keys(mediaUrls);
+                    for (const key of keys) {
+                        // MEDIA_CONFIG に設定がある場合はそれを最優先使用
+                        if (!mediaUrls[key]) {
+                            const file = await mediaStorage.getFile(key);
+                            if (file) {
+                                mediaUrls[key] = URL.createObjectURL(file);
+                            }
+                        }
+                        
+                        if (key === 'startBg' && mediaUrls.startBg && bgImages.start) {
+                            bgImages.start.src = mediaUrls.startBg;
+                            bgImages.start.classList.remove('hidden');
+                        }
+                    }
+                    // 初期読み込み後にスタート画面BGMを再生試行
+                    playStartBgm();
+                } catch (e) {
+                    console.warn('Storage init failed:', e);
+                }
+            }
+            initStorage();
+
+            // --- BGMの制御 ---
+            function playStartBgm() {
+                if (mediaUrls.startBgm && startScreen && !startScreen.classList.contains('hidden')) {
+                    if (startBgAudio.src !== mediaUrls.startBgm) {
+                        startBgAudio.src = mediaUrls.startBgm;
+                    }
+                    
+                    const playPromise = startBgAudio.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(() => {
+                            const enableAudioPreload = () => {
+                                if (startScreen && !startScreen.classList.contains('hidden') && startBgAudio.paused) {
+                                    startBgAudio.play().catch(() => {});
+                                }
+                                window.removeEventListener('pointerdown', enableAudioPreload);
+                                window.removeEventListener('mousemove', enableAudioPreload);
+                                window.removeEventListener('keydown', enableAudioPreload);
+                            };
+                            window.addEventListener('pointerdown', enableAudioPreload, { once: true });
+                            window.addEventListener('mousemove', enableAudioPreload, { once: true });
+                            window.addEventListener('keydown', enableAudioPreload, { once: true });
+                        });
+                    }
+                }
+            }
+
+            function stopStartBgm() {
+                if (startBgAudio) {
+                    startBgAudio.pause();
+                    startBgAudio.currentTime = 0;
+                }
+            }
+
+            function playBgm() {
+                stopStartBgm();
+                if (mediaUrls.choiceBgm) {
+                    if (bgAudio.src !== mediaUrls.choiceBgm) {
+                        bgAudio.src = mediaUrls.choiceBgm;
+                    }
+                    bgAudio.play().catch(() => {});
+                }
+            }
+
+            function stopBgm() {
+                if (bgAudio) {
+                    bgAudio.pause();
+                    bgAudio.currentTime = 0;
+                }
+            }
+
+            // --- 正解効果音（SE）再生 ---
+            function playCorrectSe() {
+                if (mediaUrls.correctSe) {
+                    correctSeAudio.src = mediaUrls.correctSe;
+                    correctSeAudio.currentTime = 0;
+                    correctSeAudio.play().catch(() => {});
+                }
+            }
+
+            // --- スタート画面クリック処理 ---
+            if (startScreen) {
+                startScreen.addEventListener('click', () => {
+                    if (modalSettings && !modalSettings.classList.contains('hidden')) return;
+                    
+                    stopStartBgm();
+                    if (headerNav) headerNav.classList.add('hidden');
+
+                    startScreen.classList.add('opacity-0');
+                    setTimeout(() => {
+                        startScreen.classList.add('hidden');
+                        startScreen.classList.remove('opacity-0');
+                    }, 500);
+
+                    if (mediaUrls.op) {
+                        playVideo(mediaUrls.op, () => showTutorialOrCh1());
+                    } else {
+                        showTutorialOrCh1();
+                    }
+                });
+            }
+
+            function showTutorialOrCh1() {
+                if (mediaUrls.tutorialBg) {
+                    setBgImage('tutorialBg');
+                    if (tutorialScreen) tutorialScreen.classList.remove('hidden');
+                } else {
+                    startChapter1();
+                }
+            }
+
+            if (tutorialScreen) {
+                tutorialScreen.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    tutorialScreen.classList.add('hidden');
+                    startChapter1();
+                });
+            }
+
+            // --- 動画再生関数 ---
+            function playVideo(src, onEnded) {
+                stopBgm();
+                if (quizUi) quizUi.classList.add('hidden');
+                if (videoLayer) videoLayer.classList.remove('hidden');
+                
+                if (gameVideo) {
+                    gameVideo.src = src;
+                    onVideoEndedCallback = onEnded;
+                    
+                    gameVideo.play().catch(err => {
+                        console.warn("Video play failed:", err);
+                        finishVideo();
+                    });
+                } else {
+                    if (onEnded) onEnded();
+                }
+            }
+
+            function finishVideo() {
+                if (gameVideo) gameVideo.pause();
+                if (videoLayer) videoLayer.classList.add('hidden');
+                if (onVideoEndedCallback) {
+                    const cb = onVideoEndedCallback;
+                    onVideoEndedCallback = null;
+                    cb();
+                }
+            }
+
+            if (gameVideo) gameVideo.addEventListener('ended', finishVideo);
+            if (btnSkipVideo) {
+                btnSkipVideo.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    finishVideo();
+                });
+            }
+
+            // --- 背景切り替えヘルパー ---
+            function setBgImage(imgKey) {
+                Object.values(bgImages).forEach(img => {
+                    if (img && img !== bgImages.start) img.classList.add('hidden');
+                });
+                
+                const targetKey = imgKey.replace('Bg', '');
+                if (mediaUrls[imgKey] && bgImages[targetKey]) {
+                    const targetImg = bgImages[targetKey];
+                    targetImg.src = mediaUrls[imgKey];
+                    targetImg.classList.remove('hidden');
+                    if (noBgFallback) noBgFallback.classList.add('hidden');
+                } else {
+                    if (noBgFallback) noBgFallback.classList.remove('hidden');
+                }
+            }
+
+            function hideAllChoices() {
+                Object.values(choicesContainers).forEach(el => {
+                    if (el) el.classList.add('hidden');
+                });
+            }
+
+            // --- 各章スタート ---
+            function startChapter1() {
+                currentChapter = 'ch1';
+                if (mediaUrls.ch1Video) {
+                    playVideo(mediaUrls.ch1Video, () => showQuiz1());
+                } else {
+                    showQuiz1();
+                }
+            }
+            function showQuiz1() {
+                setBgImage('ch1Bg');
+                hideAllChoices();
+                if (choicesContainers.ch1) choicesContainers.ch1.classList.remove('hidden');
+                if (quizUi) quizUi.classList.remove('hidden');
+                playBgm();
+            }
+
+            function startChapter2() {
+                currentChapter = 'ch2';
+                if (mediaUrls.ch2Video) {
+                    playVideo(mediaUrls.ch2Video, () => showQuiz2());
+                } else {
+                    showQuiz2();
+                }
+            }
+            function showQuiz2() {
+                setBgImage('ch2Bg');
+                hideAllChoices();
+                if (choicesContainers.ch2) choicesContainers.ch2.classList.remove('hidden');
+                if (quizUi) quizUi.classList.remove('hidden');
+                playBgm();
+            }
+
+            function startChapter3() {
+                currentChapter = 'ch3';
+                if (mediaUrls.ch3Video) {
+                    playVideo(mediaUrls.ch3Video, () => showQuiz3());
+                } else {
+                    showQuiz3();
+                }
+            }
+            function showQuiz3() {
+                setBgImage('ch3Bg');
+                hideAllChoices();
+                if (choicesContainers.ch3) choicesContainers.ch3.classList.remove('hidden');
+                if (quizUi) quizUi.classList.remove('hidden');
+                playBgm();
+            }
+
+            function startChapter4() {
+                currentChapter = 'ch4';
+                if (mediaUrls.ch4Video) {
+                    playVideo(mediaUrls.ch4Video, () => showQuiz4());
+                } else {
+                    showQuiz4();
+                }
+            }
+            function showQuiz4() {
+                setBgImage('ch4Bg');
+                hideAllChoices();
+                if (choicesContainers.ch4) choicesContainers.ch4.classList.remove('hidden');
+                if (quizUi) quizUi.classList.remove('hidden');
+                playBgm();
+            }
+
+            function startChapter5() {
+                currentChapter = 'ch5';
+                if (mediaUrls.ch5Video) {
+                    playVideo(mediaUrls.ch5Video, () => showQuiz5());
+                } else {
+                    showQuiz5();
+                }
+            }
+            function showQuiz5() {
+                setBgImage('ch5Bg');
+                hideAllChoices();
+                if (choicesContainers.ch5) choicesContainers.ch5.classList.remove('hidden');
+                if (quizUi) quizUi.classList.remove('hidden');
+                playBgm();
+            }
+
+            function startChapter6() {
+                currentChapter = 'ch6-q1';
+                if (mediaUrls.ch6Video) {
+                    playVideo(mediaUrls.ch6Video, () => showQuiz6Q1());
+                } else {
+                    showQuiz6Q1();
+                }
+            }
+            function showQuiz6Q1() {
+                setBgImage('ch6Bg');
+                hideAllChoices();
+                if (choicesContainers['ch6-q1']) choicesContainers['ch6-q1'].classList.remove('hidden');
+                if (quizUi) quizUi.classList.remove('hidden');
+                playBgm();
+            }
+            function showQuiz6Q2() {
+                setBgImage('ch6Bg');
+                hideAllChoices();
+                if (choicesContainers['ch6-q2']) choicesContainers['ch6-q2'].classList.remove('hidden');
+                if (quizUi) quizUi.classList.remove('hidden');
+                stopBgm();
+            }
+
+            function resetToStart() {
+                stopBgm();
+                if (quizUi) quizUi.classList.add('hidden');
+                hideAllChoices();
+                if (headerNav) headerNav.classList.remove('hidden');
+                if (startScreen) {
+                    startScreen.classList.remove('hidden', 'opacity-0');
+                    playStartBgm();
+                }
+            }
+
+            // --- クイズ選択肢ボタンクリック判定 ---
+            document.querySelectorAll('.quiz-choice-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isCorrect = btn.getAttribute('data-correct') === 'true';
+
+                    if (isCorrect && currentChapter !== 'ch6-q2') {
+                        playCorrectSe();
+                    }
+
+                    if (currentChapter === 'ch1') {
+                        if (isCorrect) {
+                            if (mediaUrls.ch1Correct) {
+                                playVideo(mediaUrls.ch1Correct, () => {
+                                    if (mediaUrls.ch1Clear) playVideo(mediaUrls.ch1Clear, () => startChapter2());
+                                    else startChapter2();
+                                });
+                            } else if (mediaUrls.ch1Clear) {
+                                playVideo(mediaUrls.ch1Clear, () => startChapter2());
+                            } else startChapter2();
+                        } else {
+                            if (mediaUrls.ch1Incorrect) playVideo(mediaUrls.ch1Incorrect, () => showQuiz1());
+                            else showQuiz1();
+                        }
+                    } else if (currentChapter === 'ch2') {
+                        if (isCorrect) {
+                            if (mediaUrls.ch2Correct) {
+                                playVideo(mediaUrls.ch2Correct, () => {
+                                    if (mediaUrls.ch2Clear) playVideo(mediaUrls.ch2Clear, () => startChapter3());
+                                    else startChapter3();
+                                });
+                            } else if (mediaUrls.ch2Clear) {
+                                playVideo(mediaUrls.ch2Clear, () => startChapter3());
+                            } else startChapter3();
+                        } else {
+                            if (mediaUrls.ch2Incorrect) playVideo(mediaUrls.ch2Incorrect, () => showQuiz2());
+                            else showQuiz2();
+                        }
+                    } else if (currentChapter === 'ch3') {
+                        if (isCorrect) {
+                            if (mediaUrls.ch3Correct) {
+                                playVideo(mediaUrls.ch3Correct, () => {
+                                    if (mediaUrls.ch3Clear) playVideo(mediaUrls.ch3Clear, () => startChapter4());
+                                    else startChapter4();
+                                });
+                            } else if (mediaUrls.ch3Clear) {
+                                playVideo(mediaUrls.ch3Clear, () => startChapter4());
+                            } else startChapter4();
+                        } else {
+                            if (mediaUrls.ch3Incorrect) playVideo(mediaUrls.ch3Incorrect, () => showQuiz3());
+                            else showQuiz3();
+                        }
+                    } else if (currentChapter === 'ch4') {
+                        if (isCorrect) {
+                            if (mediaUrls.ch4Correct) {
+                                playVideo(mediaUrls.ch4Correct, () => {
+                                    if (mediaUrls.ch4Clear) playVideo(mediaUrls.ch4Clear, () => startChapter5());
+                                    else startChapter5();
+                                });
+                            } else if (mediaUrls.ch4Clear) {
+                                playVideo(mediaUrls.ch4Clear, () => startChapter5());
+                            } else startChapter5();
+                        } else {
+                            if (mediaUrls.ch4Incorrect) playVideo(mediaUrls.ch4Incorrect, () => showQuiz4());
+                            else showQuiz4();
+                        }
+                    } else if (currentChapter === 'ch5') {
+                        if (isCorrect) {
+                            if (mediaUrls.ch5Correct) {
+                                playVideo(mediaUrls.ch5Correct, () => {
+                                    if (mediaUrls.ch5Clear) playVideo(mediaUrls.ch5Clear, () => startChapter6());
+                                    else startChapter6();
+                                });
+                            } else if (mediaUrls.ch5Clear) {
+                                playVideo(mediaUrls.ch5Clear, () => startChapter6());
+                            } else startChapter6();
+                        } else {
+                            if (mediaUrls.ch5Incorrect) playVideo(mediaUrls.ch5Incorrect, () => showQuiz5());
+                            else showQuiz5();
+                        }
+                    } else if (currentChapter === 'ch6-q1') {
+                        if (isCorrect) {
+                            if (mediaUrls.ch6Correct1) {
+                                playVideo(mediaUrls.ch6Correct1, () => {
+                                    currentChapter = 'ch6-q2';
+                                    showQuiz6Q2();
+                                });
+                            } else {
+                                currentChapter = 'ch6-q2';
+                                showQuiz6Q2();
+                            }
+                        } else {
+                            if (mediaUrls.ch6Incorrect1) playVideo(mediaUrls.ch6Incorrect1, () => showQuiz6Q1());
+                            else showQuiz6Q1();
+                        }
+                    } else if (currentChapter === 'ch6-q2') {
+                        if (isCorrect) {
+                            if (mediaUrls.ch6Correct2) playVideo(mediaUrls.ch6Correct2, () => resetToStart());
+                            else resetToStart();
+                        } else {
+                            if (mediaUrls.ch6Incorrect2) playVideo(mediaUrls.ch6Incorrect2, () => showQuiz6Q2());
+                            else showQuiz6Q2();
+                        }
+                    }
+                });
+            });
+
+            // --- モーダル制御 ---
+            if (btnSettings) {
+                btnSettings.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (modalSettings) modalSettings.classList.remove('hidden');
+                });
+            }
+
+            if (btnCloseModal) {
+                btnCloseModal.addEventListener('click', () => {
+                    if (modalSettings) modalSettings.classList.add('hidden');
+                });
+            }
+
+            if (btnApplySettings) {
+                btnApplySettings.addEventListener('click', async () => {
+                    const inputs = assetInputs;
+
+                    btnApplySettings.disabled = true;
+                    btnApplySettings.textContent = '保存中...';
+
+                    // URL欄に文字が入っていればURLを優先。空欄なら選んだファイルを使う。
+                    let latestSavedUrls = {};
+                    try {
+                        latestSavedUrls = JSON.parse(localStorage.getItem(URL_STORAGE_KEY) || '{}') || {};
+                    } catch (e) {
+                        latestSavedUrls = {};
+                    }
+
+                    for (const item of inputs) {
+                        const fileInput = document.getElementById(item.id);
+                        const urlInput = document.getElementById(`url-${item.key}`);
+                        const pastedUrl = urlInput ? urlInput.value.trim() : '';
+
+                        if (pastedUrl) {
+                            mediaUrls[item.key] = convertGoogleDriveUrl(pastedUrl);
+                            latestSavedUrls[item.key] = pastedUrl;
+                            if (item.key === 'startBg' && bgImages.start) {
+                                bgImages.start.src = mediaUrls[item.key];
+                                bgImages.start.classList.remove('hidden');
+                            }
+                            continue; // URLが入力されていたら、ファイル選択よりURLを優先
+                        }
+
+                        // URL欄が空なら、以前保存したURLを消してファイル選択を確認
+                        delete latestSavedUrls[item.key];
+                        if (fileInput && fileInput.files && fileInput.files[0]) {
+                            const file = fileInput.files[0];
+                            await mediaStorage.saveFile(item.key, file);
+                            const url = URL.createObjectURL(file);
+                            mediaUrls[item.key] = url;
+
+                            if (item.key === 'startBg' && bgImages.start) {
+                                bgImages.start.src = url;
+                                bgImages.start.classList.remove('hidden');
+                            }
+                        }
+                    }
+
+                    localStorage.setItem(URL_STORAGE_KEY, JSON.stringify(latestSavedUrls));
+
+                    btnApplySettings.disabled = false;
+                    btnApplySettings.textContent = '設定を適用して保存';
+
+                    playStartBgm();
+
+                    if (modalStatus) {
+                        modalStatus.classList.remove('hidden');
+                        setTimeout(() => {
+                            modalStatus.classList.add('hidden');
+                            if (modalSettings) modalSettings.classList.add('hidden');
+                        }, 1000);
+                    } else if (modalSettings) {
+                        modalSettings.classList.add('hidden');
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
